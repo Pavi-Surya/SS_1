@@ -20,49 +20,61 @@ public class MainClass {
 
 	public static void main(String[] args) {
 		try {
-			 if (args.length > 0) {
-			 byte[] bytes = Files.readAllBytes(Paths.get(args[0]));
-			String fileContent = new String(bytes);
-			String[] inputArray = fileContent.split(System.lineSeparator());
+			if (args.length > 0) {
+				//Creating data List
+				List<InputDO> dataList = createDataObjectList(args[0]);
 
-			List<InputDO> dataList = createDataObjectList(inputArray);
+				// Getting First log Time and Last log Time
+				InputDO firstLogTimeDO = dataList.stream()
+						.collect(Collectors.minBy(Comparator.comparing(InputDO::getTimeVal))).get();
+				LocalTime firstLogTime = firstLogTimeDO.getTimeVal();
+				InputDO lastLogTimeDO = dataList.stream()
+						.collect(Collectors.maxBy(Comparator.comparing(InputDO::getTimeVal))).get();
+				LocalTime lastLogTime = lastLogTimeDO.getTimeVal();				
 
-			// Getting First log Time and Last log Time
-			InputDO firstLogTimeDO = dataList.stream()
-					.collect(Collectors.minBy(Comparator.comparing(InputDO::getTimeVal))).get();
-			LocalTime firstLogTime = firstLogTimeDO.getTimeVal();
-			InputDO lastLogTimeDO = dataList.stream()
-					.collect(Collectors.maxBy(Comparator.comparing(InputDO::getTimeVal))).get();
-			LocalTime lastLogTime = lastLogTimeDO.getTimeVal();
+				// Get session timing, count for users
+				List<OutputDO> outputList = getRequiredOutput(firstLogTime, lastLogTime, dataList);;
+				for (OutputDO data : outputList) {
+					System.out.println(data.getUserName() + " " + data.getSessionCount() + " " + data.getSessionTime());
+				}
 
-			// Breaking session based on users
-			Map<String, List<InputDO>> groupByUser = dataList.stream()
-					.collect(Collectors.groupingBy(InputDO::getUserName));
-
-			// Get session timing, count for users
-			List<OutputDO> outputList = new ArrayList<>();
-			groupByUser.forEach((user, list) -> {
-				OutputDO outputDO = compute(user, list, firstLogTime, lastLogTime);
-				outputList.add(outputDO);
-			});
-			for (OutputDO data : outputList) {
-				System.out.println(data.getUserName() + " " + data.getSessionCount() + " " + data.getSessionTime());
+			} else {
+				System.out.println("No Input Parameters...");
 			}
-			
-			 } else { System.out.println("No Input Parameters..."); }
-			
+
 		} catch (Exception e) {
 			System.out.println("Exception occured at MainClass -> main Method..." + e.toString());
 		}
 	}
 
-	private static OutputDO compute(String user, List<InputDO> list, LocalTime firstLogTime, LocalTime lastLogTime) {
+	public static List<OutputDO> getRequiredOutput(LocalTime firstLogTime, LocalTime lastLogTime,
+			List<InputDO> dataList) {
+		try {
+			List<OutputDO> outputList = new ArrayList<>();
+			
+			// Breaking session based on users
+			Map<String, List<InputDO>> groupByUser = dataList.stream()
+					.collect(Collectors.groupingBy(InputDO::getUserName));
+			
+			//Compute the session logs for each user
+			groupByUser.forEach((user, list) -> {
+				OutputDO outputDO = compute(user, list, firstLogTime, lastLogTime);
+				outputList.add(outputDO);
+			});
+			return outputList;
+		} catch (Exception e) {
+			System.out.println("Exception occured at MainClass -> getRequiredOutput Method..." + e.toString());
+			}
+		return null;
+	}
+
+	public static OutputDO compute(String user, List<InputDO> list, LocalTime firstLogTime, LocalTime lastLogTime) {
 		try {
 			list.sort((InputDO ido1, InputDO ido2) -> ido1.getTimeVal().compareTo(ido2.getTimeVal()));
 			Map<String, List<InputDO>> activityList = list.stream()
 					.collect(Collectors.groupingBy(InputDO::getActivity));
 			int sessionCount = 0;
-			Long sessionTime = 0L;
+			long sessionTime = 0l;
 			List<InputDO> startList = activityList.get(START);
 			List<InputDO> endList = activityList.get(END);
 			for (InputDO inputDO : startList) {
@@ -98,8 +110,12 @@ public class MainClass {
 		return null;
 	}
 
-	private static List<InputDO> createDataObjectList(String[] inputArray) {
+	public static List<InputDO> createDataObjectList(String path) {
 		try {
+			byte[] bytes = Files.readAllBytes(Paths.get(path));
+			String fileContent = new String(bytes);
+			String[] inputArray = fileContent.split(System.lineSeparator());
+
 			List<InputDO> dataList = new ArrayList<>();
 			for (int iter = 0; iter < inputArray.length; iter++) {
 				String iteration = inputArray[iter];
